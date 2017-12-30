@@ -36,6 +36,7 @@ def erm_decision_stumps(train_data, train_labels, D):
 
     for j in range(d):
         f = 0
+        train_data[i] = numpy.sort(train_data[i], order=train_data[i][j])
         for i in range(len(train_data)):
             if train_labels[i] == 1:
                 f += D[i]
@@ -51,6 +52,37 @@ def erm_decision_stumps(train_data, train_labels, D):
                 j_star = j
 
     return j_star, teta_star
+
+
+def adaBoost(train_data, train_labels, T):
+    m = len(train_data)
+    # initialize
+    D = numpy.add(numpy.zeros(m), 1 / m)
+
+    h = weak_learner(D, train_data, train_labels)
+    error = calculate_error(train_data, train_labels, D, h)
+    w = 1 / 2 * log(1 / error - 1)
+
+    for i in range(m):
+        Z_i = 0
+        for j in range(m):
+            Z_i += D[j] * exp(-w * train_labels[j] * h(train_data[j]))
+        D[i] = (D[i] * exp(-w * train_labels[i] * h(train_data[i]))) / Z_i
+
+    return w, h
+
+
+def calculate_error(train_data, train_labels, D, h):
+    errors = 0
+    for i in range(len(train_data)):
+        if train_labels[i] != h(train_data[i]):
+            errors += D[i]
+
+    return errors
+
+
+def weak_learner(D, train_data, train_labels):
+    j, t = erm_decision_stumps(train_data, train_labels, D)
 
 
 j, t = erm_decision_stumps(train_data, train_labels, numpy.zeros(len(train_data)) + (1 / len(train_data)))
