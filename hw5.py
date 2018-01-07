@@ -1,3 +1,4 @@
+from __future__ import division
 from numpy import *
 import numpy.random
 from sklearn.datasets import fetch_mldata
@@ -30,61 +31,64 @@ train_data = sklearn.preprocessing.scale(train_data_unscaled, axis=0, with_std=F
 test_data = sklearn.preprocessing.scale(test_data_unscaled, axis=0, with_std=False)
 
 
-def weak_learner(train_data, train_labels, D):
+def weak_learner(data, labels, D):
     d = len(train_data[0])
     f_star = inf
-    teta_star = 0
-    j_star = 0
+    teta_star = None
+    j_star = None
     b = 0
     for j in range(d):
         f1 = 0
         f2 = 0
 
-        train_data[j] = numpy.sort(train_data[j])
-        all_j_indexes = numpy.array([train_data[0][j] for sample in train_data])
-        sorted_samplea = all_j_indexes.argsort()
-        for i in range(len(train_data)):
-            if train_labels[i] == 1:
-                f1 += D[i]
+        indexes = data[:, j].argsort()
+        sorted_data = data[indexes]
+        sorted_data_j = [x[j] for x in sorted_data]
+        sorted_labels = labels[indexes]
+        sorted_D = D[indexes]
+
+        for i in range(0, len(data)):
+            if sorted_labels[i] == 1:
+                f1 += sorted_D[i]
             else:
-                f2 += D[i]
+                f2 += sorted_D[i]
 
         if f1 < f_star:
             f_star = f1
-            teta_star = train_data[sorted_samplea[0]][j] - 1
+            teta_star = sorted_data_j[0] - 1
             j_star = j
             b = 1
 
         if f2 < f_star:
             f_star = f2
-            teta_star = train_data[sorted_samplea[0]][j] - 1
+            teta_star = sorted_data_j[0] - 1
             j_star = j
             b = -1
 
-        for i, samp_index in enumerate(sorted_samplea):
-            f1 = f1 - train_labels[samp_index] * D[samp_index]
-            f2 = f2 + train_labels[samp_index] * D[samp_index]
+        for i in range(0, len(data)):
+            f1 = f1 - sorted_labels[i] * sorted_D[i]
+            f2 = f2 + sorted_labels[i] * sorted_D[i]
 
-            if f1 < f_star:
-                if i == len(D) - 1:
+            if f1 < f_star and f1 <= f2:
+                if i == len(sorted_D) - 1:
                     f_star = f1
-                    teta_star = 1 + train_data[samp_index][j]
+                    teta_star = 1 + sorted_data_j[0]
                     j_star = j
                     b = 1
-                elif train_data[sorted_samplea[i]][j] != train_data[sorted_samplea[i + 1]][j]:
+                elif sorted_data_j[i] != sorted_data_j[i + 1]:
                     f_star = f1
-                    teta_star = 1 / 2 * (train_data[sorted_samplea[i]][j] + train_data[sorted_samplea[i + 1]][j])
+                    teta_star = 0.5 * (sorted_data_j[i] + sorted_data_j[i + 1])
                     j_star = j
                     b = 1
-            if f2 < f_star:
-                if i == len(D) - 1:
+            elif f2 < f_star and f2 < f1:
+                if i == len(sorted_D) - 1:
                     f_star = f1
-                    teta_star = 1 + train_data[samp_index][j]
+                    teta_star = 1 + sorted_data_j[0]
                     j_star = j
                     b = -1
-                elif train_data[sorted_samplea[i]][j] != train_data[sorted_samplea[i + 1]][j]:
+                elif sorted_data_j[i] != sorted_data_j[i + 1]:
                     f_star = f1
-                    teta_star = 1 / 2 * (train_data[sorted_samplea[i]][j] + train_data[sorted_samplea[i + 1]][j])
+                    teta_star = 0.5 * (sorted_data_j[i] + sorted_data_j[i + 1])
                     j_star = j
                     b = -1
     return j_star, teta_star, b
@@ -101,7 +105,6 @@ def adaBoost(train_data, train_labels, T):
 
     for l in range(T + 1):
         j, t, b = weak_learner(train_data, train_labels, D)
-        print("got j_star: " + str(j) + " teta_star: " + str(t) + " b: " + str(b))
         error = 0
 
         for i in range(len(train_data[j])):
@@ -111,7 +114,7 @@ def adaBoost(train_data, train_labels, T):
             if prediction != label:
                 error += D[i]
 
-        w = 1 / 2 * log(float(1) / float(error) - 1)
+        w = 0.5 * log((float(1) / float(error)) - 1)
         Z = 0
         for k in range(m):
             prediction = b if train_data[k][j] <= t else -b
@@ -121,7 +124,6 @@ def adaBoost(train_data, train_labels, T):
             D[i] = (D[i] * exp(-w * train_labels[i] * prediction)) / float(Z)
 
         train_error = 0
-        print("T: ", l)
         for i in range(len(train_data)):
             h_predication = b if train_data[i][j] <= t else -b
             train_samples_curr_sum[i] += w * h_predication
@@ -129,7 +131,6 @@ def adaBoost(train_data, train_labels, T):
             if train_labels[i] != final_h_predication:
                 train_error += 1
         train_error = float(train_error) / float(len(train_data))
-        print("train_error " + str(train_error))
         train_errors.append(train_error)
 
         test_error = 0
@@ -150,7 +151,7 @@ def adaBoost(train_data, train_labels, T):
     # return w, j, t
 
 
-def calculate_error(train_data, train_labels, D, j, t, b):
+def calculate_error(train_data, train_labels, sorted_D, j, t, b):
     errors = 0
     for i in range(len(train_data)):
         if train_data[i][j] <= t:
@@ -159,11 +160,8 @@ def calculate_error(train_data, train_labels, D, j, t, b):
             label = -b
 
         if label != train_labels[i]:
-            errors += D[i]
+            errors += sorted_D[i]
 
     return errors
 
-
-# j, t = weak_learner(train_data, train_labels, numpy.zeros(len(train_data)) + (1 / len(train_data)))
-# print(j)
 adaBoost(train_data, train_labels, 100)
